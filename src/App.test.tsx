@@ -1,55 +1,109 @@
-import { describe, expect, it } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
+import { TaskProvider, UNDO_DELAY_MS } from './context/TaskProvider'
+import { TASKS_STORAGE_KEY } from './utils/storage'
+
+function renderApp() {
+  return render(
+    <TaskProvider>
+      <App />
+    </TaskProvider>,
+  )
+}
 
 function taskTitles() {
   return screen.queryAllByRole('heading', { level: 3 }).map((h) => h.textContent)
 }
 
+function savedTitles(): string[] {
+  const saved = JSON.parse(localStorage.getItem(TASKS_STORAGE_KEY) ?? '[]') as { title: string }[]
+  return saved.map((task) => task.title)
+}
+
 describe('Study Planner', () => {
-  it('adds a task and clears the form', async () => {
-    const user = userEvent.setup()
-    render(<App />)
-    const title = screen.getByPlaceholderText('Наприклад, React Hooks')
-    await user.type(title, 'useState')
-    await user.click(screen.getByRole('button', { name: 'Додати' }))
-    expect(taskTitles()).toContain('useState')
-    expect(title).toHaveValue('')
+  beforeEach(() => {
+    localStorage.clear()
   })
 
-  it('does not add a task without a title', async () => {
-    const user = userEvent.setup()
-    render(<App />)
-    await user.click(screen.getByRole('button', { name: 'Додати' }))
-    expect(screen.getByText('Вкажіть назву завдання')).toBeInTheDocument()
-    expect(taskTitles()).toHaveLength(4)
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
-  it('toggles a task and updates the statistics', async () => {
+  it('adds a task, shows a toast and saves the list to localStorage', async () => {
     const user = userEvent.setup()
-    render(<App />)
-    const stats = screen.getByLabelText('Статистика')
-    expect(within(stats).getByText('Виконано').previousSibling).toHaveTextContent('1')
+    renderApp()
+    await user.type(screen.getByPlaceholderText('Наприклад, React Hooks'), 'useReducer')
+    await user.click(screen.getByRole('button', { name: 'Додати' }))
+    expect(taskTitles()).toContain('useReducer')
+    expect(screen.getByText('Завдання додано')).toBeInTheDocument()
+    expect(savedTitles()).toContain('useReducer')
+  })
+
+  it('restores tasks from localStorage after a reload', async () => {
+    const user = userEvent.setup()
+    const { unmount } = renderApp()
     await user.click(screen.getAllByRole('button', { name: 'Виконано' })[0])
+    unmount()
+    renderApp()
+    const stats = screen.getByLabelText('Статистика')
     expect(within(stats).getByText('Виконано').previousSibling).toHaveTextContent('2')
   })
 
-  it('filters the list and shows the empty filter message', async () => {
+  it('edits a task through the form in edit mode', async () => {
     const user = userEvent.setup()
-    render(<App />)
-    await user.click(screen.getByRole('button', { name: /^Виконані/ }))
-    expect(taskTitles()).toEqual(['TypeScript Exercises'])
-    await user.click(screen.getByRole('button', { name: 'Очистити виконані' }))
-    expect(screen.getByText('За цим фільтром завдань немає.')).toBeInTheDocument()
+    renderApp()
+    await user.click(screen.getAllByRole('button', { name: 'Редагувати' })[0])
+    const title = screen.getByDisplayValue('React Components')
+    await user.clear(title)
+    await user.type(title, 'React Hooks')
+    await user.click(screen.getByRole('button', { name: 'Зберегти' }))
+    expect(taskTitles()[0]).toBe('React Hooks')
+    expect(screen.getByText('Зміни збережено')).toBeInTheDocument()
   })
 
-  it('shows the empty list message when every task is deleted', async () => {
+  it('undoes a delete before the timer ends', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    renderApp()
+    await user.click(screen.getAllByRole('button', { name: 'Видалити' })[0])
+    expect(screen.getByText('Завдання буде видалено')).toBeInTheDocument()
+    expect(screen.getByText('Буде видалено')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Скасувати' }))
+    act(() => {
+      vi.advanceTimersByTime(UNDO_DELAY_MS)
+    })
+    expect(taskTitles()).toContain('React Components')
+  })
+
+  it('deletes the task for good when the timer ends', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    renderApp()
+    await user.click(screen.getAllByRole('button', { name: 'Видалити' })[0])
+    act(() => {
+      vi.advanceTimersByTime(UNDO_DELAY_MS)
+    })
+    expect(taskTitles()).not.toContain('React Components')
+    expect(screen.getByText('Завдання видалено')).toBeInTheDocument()
+    expect(savedTitles()).not.toContain('React Components')
+  })
+
+  it('shows the number of active tasks in the tab title', async () => {
     const user = userEvent.setup()
-    render(<App />)
-    for (const button of screen.getAllByRole('button', { name: 'Видалити' })) {
-      await user.click(button)
-    }
-    expect(screen.getByText('Завдань поки немає.')).toBeInTheDocument()
+    renderApp()
+    expect(document.title).toBe('Study Planner — 3 active tasks')
+    await user.click(screen.getAllByRole('button', { name: 'Виконано' })[0])
+    expect(document.title).toBe('Study Planner — 2 active tasks')
+  })
+
+  it('keeps the active filter between reloads', async () => {
+    const user = userEvent.setup()
+    const { unmount } = renderApp()
+    await user.click(screen.getByRole('button', { name: /^Виконані/ }))
+    unmount()
+    renderApp()
+    expect(taskTitles()).toEqual(['TypeScript Exercises'])
   })
 })
