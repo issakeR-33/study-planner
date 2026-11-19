@@ -5,6 +5,14 @@
   border-radius: var(--radius);
   box-shadow: var(--shadow);
 
+  &--editing {
+    margin: 8px 0 0;
+    padding: 12px 0 0;
+    border-top: 1px solid var(--color-border);
+    border-radius: 0;
+    box-shadow: none;
+  }
+
   &__title {
     margin-bottom: 14px;
     font-size: 1.1rem;
@@ -61,8 +69,21 @@
     font-size: 0.8rem;
   }
 
-  &__submit {
+  &__actions {
+    display: flex;
+    gap: 8px;
     margin-top: 16px;
+  }
+
+  &__cancel {
+    padding: 8px 16px;
+    background: none;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    cursor: pointer;
+  }
+
+  &__submit {
     padding: 8px 20px;
     color: #fff;
     font-weight: 600;

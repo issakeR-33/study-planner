@@ -5,6 +5,11 @@ import './TaskForm.scss'
 
 interface TaskFormProps {
   onSubmit: (draft: TaskDraft) => void
+  /** Режим редагування: форма заповнена даними завдання й не очищується після збереження. */
+  initialDraft?: TaskDraft
+  heading?: string
+  submitLabel?: string
+  onCancel?: () => void
 }
 
 const EMPTY_DRAFT: TaskDraft = {
@@ -16,9 +21,16 @@ const EMPTY_DRAFT: TaskDraft = {
 
 const PRIORITIES = Object.keys(PRIORITY_LABELS) as Priority[]
 
-function TaskForm({ onSubmit }: TaskFormProps) {
+function TaskForm({
+  onSubmit,
+  initialDraft,
+  heading = 'Нове завдання',
+  submitLabel = 'Додати',
+  onCancel,
+}: TaskFormProps) {
+  const isEditing = initialDraft !== undefined
   // значення полів зберігаються в одному об'єкті state і оновлюються копією
-  const [draft, setDraft] = useState<TaskDraft>(EMPTY_DRAFT)
+  const [draft, setDraft] = useState<TaskDraft>(initialDraft ?? EMPTY_DRAFT)
   const [error, setError] = useState<string | null>(null)
 
   function updateField<K extends keyof TaskDraft>(field: K, value: TaskDraft[K]) {
@@ -33,12 +45,16 @@ function TaskForm({ onSubmit }: TaskFormProps) {
       return
     }
     onSubmit(draft)
-    setDraft(EMPTY_DRAFT)
+    if (!isEditing) setDraft(EMPTY_DRAFT)
   }
 
   return (
-    <form className="task-form" onSubmit={handleSubmit} noValidate>
-      <h2 className="task-form__title">Нове завдання</h2>
+    <form
+      className={`task-form${isEditing ? ' task-form--editing' : ''}`}
+      onSubmit={handleSubmit}
+      noValidate
+    >
+      <h2 className="task-form__title">{heading}</h2>
 
       <div className="task-form__grid">
         <label className="task-form__field task-form__field--wide">
@@ -90,9 +106,16 @@ function TaskForm({ onSubmit }: TaskFormProps) {
         </label>
       </div>
 
-      <button type="submit" className="task-form__submit">
-        Додати
-      </button>
+      <div className="task-form__actions">
+        <button type="submit" className="task-form__submit">
+          {submitLabel}
+        </button>
+        {onCancel && (
+          <button type="button" className="task-form__cancel" onClick={onCancel}>
+            Скасувати
+          </button>
+        )}
+      </div>
     </form>
   )
 }
