@@ -1,11 +1,10 @@
-import type { TaskStatsData } from '../../types/task'
+import { useTaskContext } from '../../hooks/useTaskContext'
+import { getStats } from '../../utils/tasks'
 import './TaskStats.scss'
 
-interface TaskStatsProps {
-  stats: TaskStatsData
-}
+function TaskStats() {
+  const stats = getStats(useTaskContext().tasks)
 
-function TaskStats({ stats }: TaskStatsProps) {
   const items = [
     { label: 'Усього', value: stats.total, modifier: 'total' },
     { label: 'Виконано', value: stats.completed, modifier: 'completed' },

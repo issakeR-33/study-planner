@@ -1,13 +1,7 @@
+import { useTaskContext } from '../../hooks/useTaskContext'
 import type { TaskFilter, TaskStatsData } from '../../types/task'
-import { FILTER_LABELS } from '../../utils/tasks'
+import { FILTER_LABELS, getStats } from '../../utils/tasks'
 import './TaskFilters.scss'
-
-interface TaskFiltersProps {
-  value: TaskFilter
-  stats: TaskStatsData
-  onChange: (filter: TaskFilter) => void
-  onClearCompleted: () => void
-}
 
 const FILTERS: { filter: TaskFilter; count: keyof TaskStatsData }[] = [
   { filter: 'all', count: 'total' },
@@ -15,7 +9,10 @@ const FILTERS: { filter: TaskFilter; count: keyof TaskStatsData }[] = [
   { filter: 'completed', count: 'completed' },
 ]
 
-function TaskFilters({ value, stats, onChange, onClearCompleted }: TaskFiltersProps) {
+function TaskFilters() {
+  const { tasks, filter: value, setFilter, clearCompleted, resetTasks } = useTaskContext()
+  const stats = getStats(tasks)
+
   return (
     <div className="task-filters">
       <div className="task-filters__group" role="group" aria-label="Фільтр завдань">
@@ -25,7 +22,7 @@ function TaskFilters({ value, stats, onChange, onClearCompleted }: TaskFiltersPr
             type="button"
             className={`task-filters__button${value === filter ? ' task-filters__button--active' : ''}`}
             aria-pressed={value === filter}
-            onClick={() => onChange(filter)}
+            onClick={() => setFilter(filter)}
           >
             {FILTER_LABELS[filter]}
             <span className="task-filters__count">{stats[count]}</span>
@@ -33,11 +30,16 @@ function TaskFilters({ value, stats, onChange, onClearCompleted }: TaskFiltersPr
         ))}
       </div>
 
-      {stats.completed > 0 && (
-        <button type="button" className="task-filters__clear" onClick={onClearCompleted}>
-          Очистити виконані
+      <div className="task-filters__actions">
+        {stats.completed > 0 && (
+          <button type="button" className="task-filters__clear" onClick={clearCompleted}>
+            Очистити виконані
+          </button>
+        )}
+        <button type="button" className="task-filters__reset" onClick={resetTasks}>
+          Скинути дані
         </button>
-      )}
+      </div>
     </div>
   )
 }
