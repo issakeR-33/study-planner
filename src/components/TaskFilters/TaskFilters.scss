@@ -1,0 +1,55 @@
+.task-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+
+  &__group {
+    display: inline-flex;
+    padding: 3px;
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+  }
+
+  &__button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    color: var(--color-muted);
+    font-weight: 600;
+    background: none;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+
+    &--active {
+      color: #fff;
+      background-color: var(--color-primary);
+    }
+  }
+
+  &__count {
+    min-width: 20px;
+    padding: 0 6px;
+    font-size: 0.75rem;
+    background-color: rgb(0 0 0 / 8%);
+    border-radius: 999px;
+  }
+
+  &__clear {
+    padding: 6px 12px;
+    color: var(--color-danger);
+    background: none;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    cursor: pointer;
+
+    &:hover {
+      border-color: var(--color-danger);
+    }
+  }
+}
