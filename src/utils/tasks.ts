@@ -36,13 +36,21 @@ export function nextTaskId(tasks: readonly Task[]): number {
   return tasks.reduce((max, task) => Math.max(max, task.id), 0) + 1
 }
 
-export function createTask(tasks: readonly Task[], draft: TaskDraft): Task {
+// прибирає зайві пробіли й підставляє категорію за замовчуванням
+export function normalizeDraft(draft: TaskDraft): TaskDraft {
   return {
-    id: nextTaskId(tasks),
     title: draft.title.trim(),
     description: draft.description.trim(),
     category: draft.category.trim() || DEFAULT_CATEGORY,
     priority: draft.priority,
-    completed: false,
   }
+}
+
+export function createTask(tasks: readonly Task[], draft: TaskDraft): Task {
+  return { id: nextTaskId(tasks), ...normalizeDraft(draft), completed: false }
+}
+
+// дані завдання для форми редагування
+export function toDraft({ title, description, category, priority }: Task): TaskDraft {
+  return { title, description, category, priority }
 }
