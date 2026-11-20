@@ -7,6 +7,7 @@
 | ----------- | ---------------------------- | ---------------------------------------------------- |
 | №8          | `feature/react-fundamentals` | компоненти, JSX, props, `useState`, події, списки    |
 | №9          | `feature/state-effects`      | `useReducer`, Context API, `useEffect`, custom hooks |
+| №10         | `feature/rest-api`           | REST API, Repository, async states, CRUD             |
 
 ## Запуск
 
