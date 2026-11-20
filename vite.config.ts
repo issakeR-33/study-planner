@@ -10,5 +10,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
+    // тести не ходять у мережу: fetch підміняється, адреса API фіктивна
+    env: { VITE_API_URL: 'https://api.test' },
   },
 })
