@@ -13,6 +13,7 @@
 Потрібен Node.js 22.22 або новіший.
 
 ```bash
+cp .env.example .env  # адреса API (з №10)
 npm install
 npm run dev          # dev-сервер Vite
 npm run build        # перевірка типів і збірка в dist/
@@ -75,3 +76,33 @@ src/
   reducers/     taskReducer.ts
   utils/        tasks.ts, storage.ts
 ```
+
+## Лабораторна №10: REST API
+
+Локальне джерело даних замінено на [DummyJSON Todos](https://dummyjson.com/docs/todos). Адреса API береться з `VITE_API_URL` (`.env`, у Git лише `.env.example`).
+
+| Шар             | Файл                                                   | Відповідальність                                                                               |
+| --------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| HTTP client     | `src/api/httpClient.ts`                                | URL з `VITE_API_URL`, `fetch`, перевірка `response.ok`, `HttpError`, `isAbortError`            |
+| Repository      | `src/repositories/taskRepository.ts`                   | endpoint-и `/todos`, DTO `ApiTodo` → `Task`, `getAll`, `getById`, `create`, `update`, `delete` |
+| Server state    | `src/hooks/useTasks.ts`, `src/reducers/taskReducer.ts` | сторінка з API, `loading` / `success` / `error`, локальні зміни після mutation                 |
+| Деталі          | `src/hooks/useTask.ts`                                 | `GET /todos/:id` у локальному state компонента                                                 |
+| Client/UI state | `TaskProvider`                                         | поточна сторінка, фільтр (у `localStorage`), вибране завдання, toast                           |
+
+- **Компоненти не містять URL і `fetch`.** Вони викликають дії з Context, а ті ідуть через `taskRepository`.
+- **Пагінація.** Використано `limit` / `skip`, кнопки «Попередня» / «Наступна» та напис «Сторінка 2 з 26».
+- **Стани запиту:**
+  - «Loading...» під час завантаження;
+  - «Помилка завантаження. [Спробувати ще]», якщо запит не вдався;
+  - «Завдань не знайдено.», якщо список порожній;
+  - toast-повідомлення про успіх після create, update і delete.
+- **Скасування запитів.** Кожен GET списку й деталей отримує `AbortController.signal`. Cleanup effect скасовує попередній запит, коли змінюється сторінка або закриваються деталі. `AbortError` не показується як помилка.
+- **CRUD:**
+  - `POST /todos/add` з форми;
+  - `PUT /todos/:id` для назви й `completed`, перемикання `completed` зроблено як optimistic update з відкотом при помилці;
+  - `DELETE /todos/:id` після підтвердження «Видалити завдання …? Так / Ні».
+- **Обмеження DummyJSON.** API лише імітує запис. Тому після успішної відповіді reducer пам'ятає створені, змінені й видалені завдання та накладає їх на кожну завантажену сторінку. Опис, категорія й пріоритет — client-only metadata, яких немає в контракті API (`toTask` ставить значення за замовчуванням). Завдання, створені в сесії, на сервері не існують, тому їх деталі й зміни не відправляються в API.
+- **Server state vs client state.** Завдання більше не зберігаються в `localStorage`, там лишився тільки фільтр. Дані `Task` живуть в одному reducer, Context лише роздає їх компонентам.
+- **Додаткові завдання:** optimistic update для `completed` і централізована нормалізація помилок (`src/utils/errors.ts`).
+
+Тести (`npm test`) працюють з фейковим DummyJSON (`src/test/fakeApi.ts`), який підміняє `fetch`, тому в мережу вони не ходять.
