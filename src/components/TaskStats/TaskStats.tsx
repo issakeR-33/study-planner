@@ -3,10 +3,13 @@ import { getStats } from '../../utils/tasks'
 import './TaskStats.scss'
 
 function TaskStats() {
-  const stats = getStats(useTaskContext().tasks)
+  const { tasks, total } = useTaskContext()
+  // статистика сторінки рахується під час рендеру, загальна кількість приходить з API
+  const stats = getStats(tasks)
 
   const items = [
-    { label: 'Усього', value: stats.total, modifier: 'total' },
+    { label: 'Усього в API', value: total, modifier: 'total' },
+    { label: 'На сторінці', value: stats.total, modifier: 'page' },
     { label: 'Виконано', value: stats.completed, modifier: 'completed' },
     { label: 'Не виконано', value: stats.active, modifier: 'active' },
   ]

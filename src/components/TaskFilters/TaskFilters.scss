@@ -40,11 +40,6 @@
     border-radius: 999px;
   }
 
-  &__actions {
-    display: flex;
-    gap: 8px;
-  }
-
   &__reset {
     padding: 6px 12px;
     color: var(--color-muted);
@@ -55,19 +50,6 @@
 
     &:hover {
       border-color: var(--color-primary);
-    }
-  }
-
-  &__clear {
-    padding: 6px 12px;
-    color: var(--color-danger);
-    background: none;
-    border: 1px solid var(--color-border);
-    border-radius: 6px;
-    cursor: pointer;
-
-    &:hover {
-      border-color: var(--color-danger);
     }
   }
 }

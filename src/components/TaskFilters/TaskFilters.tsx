@@ -10,7 +10,8 @@ const FILTERS: { filter: TaskFilter; count: keyof TaskStatsData }[] = [
 ]
 
 function TaskFilters() {
-  const { tasks, filter: value, setFilter, clearCompleted, resetTasks } = useTaskContext()
+  const { tasks, filter: value, setFilter, reload } = useTaskContext()
+  // лічильники рахуються для завантаженої сторінки
   const stats = getStats(tasks)
 
   return (
@@ -30,16 +31,9 @@ function TaskFilters() {
         ))}
       </div>
 
-      <div className="task-filters__actions">
-        {stats.completed > 0 && (
-          <button type="button" className="task-filters__clear" onClick={clearCompleted}>
-            Очистити виконані
-          </button>
-        )}
-        <button type="button" className="task-filters__reset" onClick={resetTasks}>
-          Скинути дані
-        </button>
-      </div>
+      <button type="button" className="task-filters__reset" onClick={reload}>
+        Оновити
+      </button>
     </div>
   )
 }

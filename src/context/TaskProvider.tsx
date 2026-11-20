@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useReducer, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useLocalStorage } from '../hooks/useLocalStorage'
-import { createInitialState, taskReducer } from '../reducers/taskReducer'
-import type { TaskDraft, TaskFilter } from '../types/task'
-import { loadTasks, TASKS_STORAGE_KEY } from '../utils/storage'
+import { useTasks } from '../hooks/useTasks'
+import type { Task, TaskDraft, TaskFilter } from '../types/task'
+import { errorText } from '../utils/errors'
+import { normalizeDraft } from '../utils/tasks'
 import {
   TaskContext,
   type TaskContextValue,
@@ -10,23 +11,34 @@ import {
   type ToastVariant,
 } from './taskContext'
 
-export const UNDO_DELAY_MS = 5000
 export const TOAST_DURATION_MS = 3000
 
 interface TaskProviderProps {
   children: ReactNode
 }
 
+// Context лише роздає компонентам server state з useTasks і client/UI state,
+// щоб не передавати їх через кілька рівнів props. Дані Task зберігаються в одному місці.
 export function TaskProvider({ children }: TaskProviderProps) {
-  // reducer - єдине джерело правди для tasks; початковий стан читається з localStorage один раз
-  const [state, dispatch] = useReducer(taskReducer, undefined, () =>
-    createInitialState(loadTasks()),
-  )
-  const { tasks, pendingDelete } = state
+  const {
+    tasks,
+    status,
+    error,
+    total,
+    page,
+    totalPages,
+    goToPage,
+    reload,
+    isLocal,
+    create,
+    update,
+    toggle,
+    remove,
+  } = useTasks()
 
-  // активний фільтр зберігається окремо через власний hook
+  // у localStorage лише client/UI state: активний фільтр, а не самі завдання
   const [filter, setFilter] = useLocalStorage<TaskFilter>('study-planner:filter', 'all')
-
+  const [selectedId, setSelectedId] = useState<number | null>(null)
   const [toast, setToast] = useState<ToastMessage | null>(null)
 
   const showToast = useCallback((text: string, variant: ToastVariant = 'success') => {
@@ -35,113 +47,104 @@ export function TaskProvider({ children }: TaskProviderProps) {
 
   const dismissToast = useCallback(() => setToast(null), [])
 
-  // синхронізація tasks з localStorage після кожної зміни
-  useEffect(() => {
-    try {
-      localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks))
-    } catch {
-      // сховище може бути недоступне (приватний режим, переповнення): дані лишаються в пам'яті
-    }
-  }, [tasks])
-
-  // заголовок вкладки показує кількість невиконаних завдань
+  // заголовок вкладки показує кількість невиконаних завдань на сторінці
   useEffect(() => {
     const active = tasks.filter((task) => !task.completed).length
     document.title = `Study Planner — ${active} active ${active === 1 ? 'task' : 'tasks'}`
   }, [tasks])
 
-  // Undoable Delete: таймер живе в effect, а не в reducer. Нове заплановане видалення
-  // або Undo змінює pendingDelete, і cleanup скасовує попередній таймер.
-  useEffect(() => {
-    if (!pendingDelete) return
-    const timer = setTimeout(() => {
-      dispatch({ type: 'confirmDelete' })
-      showToast(
-        pendingDelete.kind === 'completed' ? 'Виконані завдання видалено' : 'Завдання видалено',
-      )
-    }, UNDO_DELAY_MS)
-    return () => clearTimeout(timer)
-  }, [pendingDelete, showToast])
-
-  // звичайне сповіщення зникає саме
   useEffect(() => {
     if (!toast) return
     const timer = setTimeout(() => setToast(null), TOAST_DURATION_MS)
     return () => clearTimeout(timer)
   }, [toast])
 
-  const addTask = useCallback(
-    (draft: TaskDraft) => {
-      dispatch({ type: 'add', draft })
-      showToast('Завдання додано')
+  // спільна обгортка для mutation: success або error toast і результат для форми
+  const run = useCallback(
+    async (action: () => Promise<void>, success: string, failure: string) => {
+      try {
+        await action()
+        if (success) showToast(success)
+        return true
+      } catch (e) {
+        showToast(`${failure}: ${errorText(e)}`, 'error')
+        return false
+      }
     },
     [showToast],
   )
 
-  const updateTask = useCallback(
-    (id: number, draft: TaskDraft) => {
-      if (pendingDelete?.ids.includes(id)) {
-        showToast('Завдання вже заплановано до видалення', 'error')
-        return
-      }
-      dispatch({ type: 'update', id, draft })
-      showToast('Зміни збережено')
-    },
-    [pendingDelete, showToast],
+  const createTask = useCallback(
+    (draft: TaskDraft) => run(() => create(draft), 'Завдання створено', 'Не вдалося створити'),
+    [run, create],
   )
 
-  const toggleTask = useCallback((id: number) => dispatch({ type: 'toggle', id }), [])
+  const updateTask = useCallback(
+    (task: Task, draft: TaskDraft) => {
+      const next: Task = { ...task, ...normalizeDraft(draft) }
+      return run(
+        () => update(next, { title: next.title }),
+        'Зміни збережено',
+        'Не вдалося зберегти',
+      )
+    },
+    [run, update],
+  )
 
-  const requestDelete = useCallback((id: number) => dispatch({ type: 'requestDelete', id }), [])
+  const toggleTask = useCallback(
+    (task: Task) => run(() => toggle(task), '', 'Не вдалося змінити стан'),
+    [run, toggle],
+  )
 
-  const undoDelete = useCallback(() => {
-    dispatch({ type: 'undoDelete' })
-    showToast('Видалення скасовано', 'info')
-  }, [showToast])
+  const deleteTask = useCallback(
+    (task: Task) => {
+      const result = run(() => remove(task.id), 'Завдання видалено', 'Не вдалося видалити')
+      setSelectedId((id) => (id === task.id ? null : id))
+      return result
+    },
+    [run, remove],
+  )
 
-  const clearCompleted = useCallback(() => {
-    if (!tasks.some((task) => task.completed)) {
-      showToast('Немає виконаних завдань для очищення', 'error')
-      return
-    }
-    dispatch({ type: 'clearCompleted' })
-  }, [tasks, showToast])
-
-  const resetTasks = useCallback(() => {
-    dispatch({ type: 'reset' })
-    setFilter('all')
-    showToast('Дані скинуто до початкових', 'info')
-  }, [setFilter, showToast])
-
-  // value створюється заново лише тоді, коли змінюється щось, що в ньому лежить
   const value = useMemo<TaskContextValue>(
     () => ({
       tasks,
+      status,
+      error,
+      total,
+      page,
+      totalPages,
+      goToPage,
+      reload,
       filter,
       setFilter,
-      pendingDelete,
-      addTask,
+      selectedId,
+      openDetails: setSelectedId,
+      closeDetails: () => setSelectedId(null),
+      createTask,
       updateTask,
       toggleTask,
-      requestDelete,
-      undoDelete,
-      clearCompleted,
-      resetTasks,
+      deleteTask,
+      isLocalTask: isLocal,
       toast,
       dismissToast,
     }),
     [
       tasks,
+      status,
+      error,
+      total,
+      page,
+      totalPages,
+      goToPage,
+      reload,
       filter,
       setFilter,
-      pendingDelete,
-      addTask,
+      selectedId,
+      createTask,
       updateTask,
       toggleTask,
-      requestDelete,
-      undoDelete,
-      clearCompleted,
-      resetTasks,
+      deleteTask,
+      isLocal,
       toast,
       dismissToast,
     ],

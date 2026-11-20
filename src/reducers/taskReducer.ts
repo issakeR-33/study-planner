@@ -1,83 +1,114 @@
-import { initialTasks } from '../data/initialTasks'
-import type { Task, TaskDraft } from '../types/task'
-import { createTask, normalizeDraft } from '../utils/tasks'
+import type { TaskPage } from '../repositories/taskRepository'
+import type { Task } from '../types/task'
 
-/** Заплановане видалення: одне завдання або всі виконані (власний undo-flow для «Очистити виконані»). */
-export interface PendingDelete {
-  ids: number[]
-  kind: 'single' | 'completed'
+export type RequestStatus = 'loading' | 'success' | 'error'
+
+/**
+ * Зміни, які DummyJSON лише імітує. Після успішної mutation-відповіді сервер нічого не
+ * зберігає, тому клієнт сам пам'ятає їх у межах сесії й накладає на кожну отриману сторінку.
+ */
+export interface LocalChanges {
+  created: Task[]
+  updated: Record<number, Task>
+  deletedIds: number[]
 }
 
+// Server state списку: остання сторінка з API, стан запиту і локальні зміни поверх неї
 export interface TasksState {
-  tasks: Task[]
-  pendingDelete: PendingDelete | null
+  status: RequestStatus
+  page: TaskPage | null
+  error: string | null
+  changes: LocalChanges
 }
 
-export type TaskAction =
-  | { type: 'add'; draft: TaskDraft }
-  | { type: 'toggle'; id: number }
-  | { type: 'update'; id: number; draft: TaskDraft }
-  | { type: 'requestDelete'; id: number }
-  | { type: 'confirmDelete' }
-  | { type: 'undoDelete' }
-  | { type: 'clearCompleted' }
-  | { type: 'reset' }
+export type TasksAction =
+  | { type: 'fetchStart' }
+  | { type: 'fetchSuccess'; page: TaskPage }
+  | { type: 'fetchError'; error: string }
+  | { type: 'created'; task: Task }
+  | { type: 'updated'; task: Task }
+  | { type: 'removed'; id: number }
 
-export function createInitialState(tasks: Task[] = initialTasks): TasksState {
-  return { tasks, pendingDelete: null }
+export const initialTasksState: TasksState = {
+  status: 'loading',
+  page: null,
+  error: null,
+  changes: { created: [], updated: {}, deletedIds: [] },
 }
 
-function withoutIds(tasks: Task[], ids: readonly number[]): Task[] {
-  return tasks.filter((task) => !ids.includes(task.id))
+export function isLocalTask(state: TasksState, id: number): boolean {
+  return state.changes.created.some((task) => task.id === id)
 }
 
-// Попереднє заплановане видалення завершується, щойно запускається нове:
-// одночасно активне лише одне Undoable Delete.
-function startPending(state: TasksState, pending: PendingDelete): TasksState {
-  const tasks = state.pendingDelete ? withoutIds(state.tasks, state.pendingDelete.ids) : state.tasks
-  return { tasks, pendingDelete: pending }
+// API щоразу повертає для нового завдання той самий id (total + 1), тож робимо його унікальним
+function uniqueId(state: TasksState, apiId: number): number {
+  const taken = [
+    ...(state.page?.tasks.map((task) => task.id) ?? []),
+    ...state.changes.created.map((task) => task.id),
+    state.page?.total ?? 0,
+  ]
+  return Math.max(apiId, ...taken.map((id) => id + 1))
 }
 
-// Чиста функція: лише обчислює новий state, без таймерів, localStorage і DOM.
-export function taskReducer(state: TasksState, action: TaskAction): TasksState {
+// Чиста функція: лише обчислює новий state, без запитів і побічних ефектів
+export function tasksReducer(state: TasksState, action: TasksAction): TasksState {
   switch (action.type) {
-    case 'add':
-      return { ...state, tasks: [...state.tasks, createTask(state.tasks, action.draft)] }
+    case 'fetchStart':
+      return { ...state, status: 'loading', error: null }
 
-    case 'toggle':
-      return {
-        ...state,
-        tasks: state.tasks.map((task) =>
-          task.id === action.id ? { ...task, completed: !task.completed } : task,
-        ),
-      }
+    case 'fetchSuccess':
+      return { ...state, status: 'success', page: action.page, error: null }
 
-    case 'update':
-      return {
-        ...state,
-        tasks: state.tasks.map((task) =>
-          task.id === action.id ? { ...task, ...normalizeDraft(action.draft) } : task,
-        ),
-      }
+    case 'fetchError':
+      return { ...state, status: 'error', error: action.error }
 
-    case 'requestDelete':
-      if (!state.tasks.some((task) => task.id === action.id)) return state
-      return startPending(state, { ids: [action.id], kind: 'single' })
-
-    case 'clearCompleted': {
-      const ids = state.tasks.filter((task) => task.completed).map((task) => task.id)
-      if (ids.length === 0) return state
-      return startPending(state, { ids, kind: 'completed' })
+    case 'created': {
+      const task = { ...action.task, id: uniqueId(state, action.task.id) }
+      return { ...state, changes: { ...state.changes, created: [task, ...state.changes.created] } }
     }
 
-    case 'confirmDelete':
-      if (!state.pendingDelete) return state
-      return { tasks: withoutIds(state.tasks, state.pendingDelete.ids), pendingDelete: null }
+    case 'updated': {
+      const { task } = action
+      const { changes } = state
+      return isLocalTask(state, task.id)
+        ? {
+            ...state,
+            changes: {
+              ...changes,
+              created: changes.created.map((item) => (item.id === task.id ? task : item)),
+            },
+          }
+        : { ...state, changes: { ...changes, updated: { ...changes.updated, [task.id]: task } } }
+    }
 
-    case 'undoDelete':
-      return { ...state, pendingDelete: null }
-
-    case 'reset':
-      return createInitialState()
+    case 'removed': {
+      const { changes } = state
+      return isLocalTask(state, action.id)
+        ? {
+            ...state,
+            changes: {
+              ...changes,
+              created: changes.created.filter((task) => task.id !== action.id),
+            },
+          }
+        : { ...state, changes: { ...changes, deletedIds: [...changes.deletedIds, action.id] } }
+    }
   }
+}
+
+// Derived state: завдання поточної сторінки з урахуванням локальних змін.
+// Нові завдання показуються першими на першій сторінці.
+export function selectTasks(state: TasksState): Task[] {
+  if (!state.page) return []
+  const { created, updated, deletedIds } = state.changes
+  const fromApi = state.page.tasks
+    .filter((task) => !deletedIds.includes(task.id))
+    .map((task) => updated[task.id] ?? task)
+  return state.page.skip === 0 ? [...created, ...fromApi] : fromApi
+}
+
+export function selectTotal(state: TasksState): number {
+  if (!state.page) return 0
+  const { created, deletedIds } = state.changes
+  return Math.max(0, state.page.total + created.length - deletedIds.length)
 }

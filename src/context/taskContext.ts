@@ -1,5 +1,5 @@
 import { createContext } from 'react'
-import type { PendingDelete } from '../reducers/taskReducer'
+import type { RequestStatus } from '../reducers/taskReducer'
 import type { Task, TaskDraft, TaskFilter } from '../types/task'
 
 export type ToastVariant = 'success' | 'error' | 'info'
@@ -11,17 +11,27 @@ export interface ToastMessage {
 }
 
 export interface TaskContextValue {
+  // server state (дані з API, ними керує useTasks)
   tasks: Task[]
+  status: RequestStatus
+  error: string | null
+  total: number
+  // client/UI state
+  page: number
+  totalPages: number
+  goToPage: (page: number) => void
+  reload: () => void
   filter: TaskFilter
   setFilter: (filter: TaskFilter) => void
-  pendingDelete: PendingDelete | null
-  addTask: (draft: TaskDraft) => void
-  updateTask: (id: number, draft: TaskDraft) => void
-  toggleTask: (id: number) => void
-  requestDelete: (id: number) => void
-  undoDelete: () => void
-  clearCompleted: () => void
-  resetTasks: () => void
+  selectedId: number | null
+  openDetails: (id: number) => void
+  closeDetails: () => void
+  // дії; кожна повертає true, якщо запит пройшов успішно
+  createTask: (draft: TaskDraft) => Promise<boolean>
+  updateTask: (task: Task, draft: TaskDraft) => Promise<boolean>
+  toggleTask: (task: Task) => Promise<boolean>
+  deleteTask: (task: Task) => Promise<boolean>
+  isLocalTask: (id: number) => boolean
   toast: ToastMessage | null
   dismissToast: () => void
 }

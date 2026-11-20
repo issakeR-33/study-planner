@@ -7,14 +7,15 @@ import ToastArea from './components/Toast/ToastArea'
 import { useTaskContext } from './hooks/useTaskContext'
 import './App.scss'
 
-// Стан і дії тепер у TaskProvider, App лише складає сторінку з компонентів
+// App лише складає сторінку: дані й дії приходять з TaskProvider,
+// а HTTP-запити виконує taskRepository
 function App() {
-  const { addTask } = useTaskContext()
+  const { createTask } = useTaskContext()
 
   return (
     <main className="app">
-      <Header title="Study Planner" subtitle="Планувальник навчальних завдань" />
-      <TaskForm onSubmit={addTask} />
+      <Header title="Study Planner" subtitle="Навчальні завдання з DummyJSON Todos API" />
+      <TaskForm onSubmit={createTask} />
       <TaskStats />
       <TaskFilters />
       <TaskList />

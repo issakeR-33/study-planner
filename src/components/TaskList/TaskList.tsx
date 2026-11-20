@@ -4,27 +4,42 @@ import TaskItem from '../TaskItem/TaskItem'
 import './TaskList.scss'
 
 function TaskList() {
-  const { tasks, filter } = useTaskContext()
-  // derived state: рахується під час рендеру, без окремого state чи effect
-  const visibleTasks = filterTasks(tasks, filter)
+  const { tasks, status, error, reload, filter } = useTaskContext()
 
-  if (tasks.length === 0) {
+  // loading, error, empty і success - окремі видимі стани
+  if (status === 'loading') {
     return (
-      <div className="task-list__empty">
-        <p>Завдань поки немає.</p>
-        <p>Додайте перше навчальне завдання.</p>
+      <p className="task-list__state task-list__state--loading" role="status">
+        Loading...
+      </p>
+    )
+  }
+
+  if (status === 'error') {
+    return (
+      <div className="task-list__state task-list__state--error" role="alert">
+        <p>Помилка завантаження. {error}</p>
+        <button type="button" className="task-list__retry" onClick={reload}>
+          Спробувати ще
+        </button>
       </div>
     )
   }
 
+  if (tasks.length === 0) {
+    return <p className="task-list__state">Завдань не знайдено.</p>
+  }
+
+  // derived state: фільтр застосовується до завантаженої сторінки під час рендеру
+  const visibleTasks = filterTasks(tasks, filter)
+
   if (visibleTasks.length === 0) {
-    return <p className="task-list__empty">За цим фільтром завдань немає.</p>
+    return <p className="task-list__state">За цим фільтром завдань немає.</p>
   }
 
   return (
     <ul className="task-list">
       {visibleTasks.map((task) => (
-        // стабільний key - id завдання, а не індекс у масиві
         <TaskItem key={task.id} task={task} />
       ))}
     </ul>

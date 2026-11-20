@@ -4,7 +4,8 @@ import { PRIORITY_LABELS } from '../../utils/tasks'
 import './TaskForm.scss'
 
 interface TaskFormProps {
-  onSubmit: (draft: TaskDraft) => void
+  /** Може повернути Promise: форма чекає відповіді й очищується лише після успіху. */
+  onSubmit: (draft: TaskDraft) => void | Promise<boolean>
   /** Режим редагування: форма заповнена даними завдання й не очищується після збереження. */
   initialDraft?: TaskDraft
   heading?: string
@@ -32,20 +33,23 @@ function TaskForm({
   // значення полів зберігаються в одному об'єкті state і оновлюються копією
   const [draft, setDraft] = useState<TaskDraft>(initialDraft ?? EMPTY_DRAFT)
   const [error, setError] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   function updateField<K extends keyof TaskDraft>(field: K, value: TaskDraft[K]) {
     setDraft((prev) => ({ ...prev, [field]: value }))
     if (field === 'title' && error) setError(null)
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!draft.title.trim()) {
       setError('Вкажіть назву завдання')
       return
     }
-    onSubmit(draft)
-    if (!isEditing) setDraft(EMPTY_DRAFT)
+    setIsSubmitting(true)
+    const ok = await onSubmit(draft)
+    setIsSubmitting(false)
+    if (ok !== false && !isEditing) setDraft(EMPTY_DRAFT)
   }
 
   return (
@@ -107,8 +111,8 @@ function TaskForm({
       </div>
 
       <div className="task-form__actions">
-        <button type="submit" className="task-form__submit">
-          {submitLabel}
+        <button type="submit" className="task-form__submit" disabled={isSubmitting}>
+          {isSubmitting ? 'Збереження...' : submitLabel}
         </button>
         {onCancel && (
           <button type="button" className="task-form__cancel" onClick={onCancel}>

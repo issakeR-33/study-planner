@@ -14,7 +14,7 @@
   &--pending {
     border-left-color: var(--color-danger);
     border-style: dashed;
-    opacity: 0.45;
+    opacity: 0.85;
   }
 
   &__row {
@@ -44,6 +44,31 @@
   &--completed &__title,
   &--pending &__title {
     text-decoration: line-through;
+  }
+
+  &__link {
+    padding: 0;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    background: none;
+    border: none;
+    cursor: pointer;
+
+    &:hover {
+      color: var(--color-primary);
+      text-decoration: underline;
+    }
+  }
+
+  &__confirm {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--color-border);
   }
 
   &__description {

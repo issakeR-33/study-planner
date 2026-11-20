@@ -1,67 +1,48 @@
 import { describe, expect, it } from 'vitest'
-import { initialTasks } from '../data/initialTasks'
-import { createInitialState, taskReducer, type TasksState } from './taskReducer'
+import type { TaskPage } from '../repositories/taskRepository'
+import type { Task } from '../types/task'
+import { initialTasksState, selectTasks, selectTotal, tasksReducer } from './taskReducer'
 
-const draft = { title: 'Hooks', description: '', category: 'React', priority: 'low' as const }
-
-function ids(state: TasksState) {
-  return state.tasks.map((task) => task.id)
+function task(id: number, overrides: Partial<Task> = {}): Task {
+  return {
+    id,
+    title: `Todo ${id}`,
+    description: '',
+    completed: false,
+    priority: 'medium',
+    category: 'Загальне',
+    ...overrides,
+  }
 }
 
-describe('taskReducer', () => {
-  const start = createInitialState()
+const firstPage: TaskPage = { tasks: [task(1), task(2), task(3)], total: 30, skip: 0, limit: 3 }
 
-  it('adds, toggles and updates tasks without mutating the previous state', () => {
-    const added = taskReducer(start, { type: 'add', draft })
-    expect(ids(added)).toEqual([1, 2, 3, 4, 5])
-    expect(start.tasks).toBe(initialTasks)
+describe('tasksReducer', () => {
+  const loaded = tasksReducer(initialTasksState, { type: 'fetchSuccess', page: firstPage })
 
-    const toggled = taskReducer(added, { type: 'toggle', id: 5 })
-    expect(toggled.tasks[4]?.completed).toBe(true)
-    expect(added.tasks[4]?.completed).toBe(false)
-
-    const updated = taskReducer(toggled, {
-      type: 'update',
-      id: 5,
-      draft: { ...draft, title: '  useEffect ', priority: 'high' },
-    })
-    expect(updated.tasks[4]).toMatchObject({
-      title: 'useEffect',
-      priority: 'high',
-      completed: true,
+  it('goes through loading, success and error states', () => {
+    expect(initialTasksState.status).toBe('loading')
+    expect(loaded.status).toBe('success')
+    const failed = tasksReducer(loaded, { type: 'fetchError', error: 'boom' })
+    expect(failed).toMatchObject({ status: 'error', error: 'boom' })
+    expect(tasksReducer(failed, { type: 'fetchStart' })).toMatchObject({
+      status: 'loading',
+      error: null,
     })
   })
 
-  it('keeps a task until confirmDelete and restores it on undoDelete', () => {
-    const pending = taskReducer(start, { type: 'requestDelete', id: 1 })
-    expect(pending.pendingDelete).toEqual({ ids: [1], kind: 'single' })
-    expect(ids(pending)).toContain(1)
-
-    expect(ids(taskReducer(pending, { type: 'confirmDelete' }))).toEqual([2, 3, 4])
-
-    const undone = taskReducer(pending, { type: 'undoDelete' })
-    expect(undone.pendingDelete).toBeNull()
-    expect(ids(undone)).toEqual([1, 2, 3, 4])
+  it('shows a created task first and gives it a unique id', () => {
+    const once = tasksReducer(loaded, { type: 'created', task: task(31, { title: 'New' }) })
+    const twice = tasksReducer(once, { type: 'created', task: task(31, { title: 'Newer' }) })
+    expect(selectTasks(twice).map((t) => t.id)).toEqual([32, 31, 1, 2, 3])
+    expect(selectTotal(twice)).toBe(32)
   })
 
-  it('finishes the previous pending delete when a new one starts', () => {
-    const first = taskReducer(start, { type: 'requestDelete', id: 1 })
-    const second = taskReducer(first, { type: 'requestDelete', id: 3 })
-    expect(ids(second)).toEqual([2, 3, 4])
-    expect(second.pendingDelete?.ids).toEqual([3])
-  })
-
-  it('clears completed tasks through the same undo flow', () => {
-    const pending = taskReducer(start, { type: 'clearCompleted' })
-    expect(pending.pendingDelete).toEqual({ ids: [2], kind: 'completed' })
-    expect(ids(taskReducer(pending, { type: 'confirmDelete' }))).toEqual([1, 3, 4])
-  })
-
-  it('resets to the initial data', () => {
-    const changed = taskReducer(taskReducer(start, { type: 'add', draft }), {
-      type: 'requestDelete',
-      id: 1,
-    })
-    expect(taskReducer(changed, { type: 'reset' })).toEqual(createInitialState())
+  it('keeps updates and deletions after the page is fetched again', () => {
+    const updated = tasksReducer(loaded, { type: 'updated', task: task(2, { title: 'Edited' }) })
+    const removed = tasksReducer(updated, { type: 'removed', id: 3 })
+    const refetched = tasksReducer(removed, { type: 'fetchSuccess', page: firstPage })
+    expect(selectTasks(refetched).map((t) => t.title)).toEqual(['Todo 1', 'Edited'])
+    expect(selectTotal(refetched)).toBe(29)
   })
 })
