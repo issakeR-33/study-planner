@@ -4,7 +4,6 @@ import './TaskList.scss'
 
 interface TaskListProps {
   tasks: Task[]
-  /** Чи є завдання взагалі (до фільтрації), щоб показати правильне порожнє повідомлення. */
   hasAnyTasks: boolean
   onToggle: (id: number) => void
   onDelete: (id: number) => void
@@ -27,7 +26,8 @@ function TaskList({ tasks, hasAnyTasks, onToggle, onDelete }: TaskListProps) {
   return (
     <ul className="task-list">
       {tasks.map((task) => (
-        // стабільний key - id завдання, а не індекс у масиві
+
+
         <TaskItem key={task.id} task={task} onToggle={onToggle} onDelete={onDelete} />
       ))}
     </ul>

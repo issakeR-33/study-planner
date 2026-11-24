@@ -10,15 +10,15 @@ import { createTask, filterTasks, getStats } from './utils/tasks'
 import './App.scss'
 
 function App() {
-  // спільний state живе в App, бо його використовують кілька дочірніх компонентів
+
   const [tasks, setTasks] = useState<Task[]>(initialTasks)
   const [filter, setFilter] = useState<TaskFilter>('all')
 
-  // derived state: обчислюється під час рендеру з поточного масиву
+
   const visibleTasks = filterTasks(tasks, filter)
   const stats = getStats(tasks)
 
-  // усі оновлення незмінні: створюємо новий масив і нові об'єкти
+
   function addTask(draft: TaskDraft) {
     setTasks((prev) => [...prev, createTask(prev, draft)])
   }
