@@ -1,5 +1,13 @@
 import { HttpError } from '../api/httpClient'
 
+/** Захищену дію викликали без входу в систему. */
+export class NotAuthenticatedError extends Error {
+  constructor() {
+    super('Увійдіть, щоб змінювати завдання')
+    this.name = 'NotAuthenticatedError'
+  }
+}
+
 // Централізоване перетворення помилки на зрозумілий текст для інтерфейсу
 export function errorText(error: unknown): string {
   if (error instanceof HttpError) {

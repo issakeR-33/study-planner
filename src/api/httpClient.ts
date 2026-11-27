@@ -1,6 +1,8 @@
 // API layer: єдине місце, яке знає про fetch, базову адресу, заголовки й HTTP-статуси.
 // Компоненти й repository отримують або дані, або HttpError.
 
+import { clearSession, getAccessToken } from '../auth/session'
+
 const API_URL = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')
 
 export class HttpError extends Error {
@@ -21,6 +23,8 @@ export interface RequestOptions {
   /** Сигнал AbortController для скасування запиту. */
   signal?: AbortSignal
   query?: Record<string, string | number | undefined>
+  /** Додати заголовок Authorization: Bearer <accessToken>. */
+  auth?: boolean
 }
 
 // Скасований запит - не помилка для користувача, тому його легко відрізнити
@@ -53,15 +57,24 @@ async function errorMessage(response: Response): Promise<string> {
 }
 
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', body, signal, query } = options
+  const { method = 'GET', body, signal, query, auth = false } = options
   const url = buildUrl(path, query)
+
+  // Authorization header формується лише тут, а не в кожному компоненті
+  const headers = new Headers()
+  if (body !== undefined) headers.set('Content-Type', 'application/json')
+  if (auth) {
+    const token = getAccessToken()
+    if (!token) throw new HttpError(401, 'Потрібно увійти в систему')
+    headers.set('Authorization', `Bearer ${token}`)
+  }
 
   let response: Response
   try {
     response = await fetch(url, {
       method,
       signal,
-      headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+      headers,
       body: body === undefined ? undefined : JSON.stringify(body),
     })
   } catch (error) {
@@ -71,6 +84,8 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   }
 
   if (!response.ok) {
+    // токен прострочений або недійсний: сесія закінчується, protected routes знову закриті
+    if (auth && response.status === 401) clearSession()
     throw new HttpError(response.status, await errorMessage(response))
   }
   return (await response.json()) as T
