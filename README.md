@@ -3,11 +3,12 @@
 Навчальний планувальник завдань на React 19 + TypeScript.
 Спільний застосунок для лабораторних 8–11 з курсу «Інженерія клієнтських веб-систем».
 
-| Лабораторна | Гілка                        | Тема                                                 |
-| ----------- | ---------------------------- | ---------------------------------------------------- |
-| №8          | `feature/react-fundamentals` | компоненти, JSX, props, `useState`, події, списки    |
-| №9          | `feature/state-effects`      | `useReducer`, Context API, `useEffect`, custom hooks |
-| №10         | `feature/rest-api`           | REST API, Repository, async states, CRUD             |
+| Лабораторна | Гілка                        | Тема                                                         |
+| ----------- | ---------------------------- | ------------------------------------------------------------ |
+| №8          | `feature/react-fundamentals` | компоненти, JSX, props, `useState`, події, списки            |
+| №9          | `feature/state-effects`      | `useReducer`, Context API, `useEffect`, custom hooks         |
+| №10         | `feature/rest-api`           | REST API, Repository, async states, CRUD                     |
+| №11         | `feature/routing-auth`       | React Router 8 (Data Mode), форми, валідація, автентифікація |
 
 ## Запуск
 
@@ -107,3 +108,50 @@ src/
 - **Додаткові завдання:** optimistic update для `completed` і централізована нормалізація помилок (`src/utils/errors.ts`).
 
 Тести (`npm test`) працюють з фейковим DummyJSON (`src/test/fakeApi.ts`), який підміняє `fetch`, тому в мережу вони не ходять.
+
+## Лабораторна №11: React Router, форми та автентифікація
+
+Варіант непарний, тому маршрутизація зроблена в **Data Mode**: `createBrowserRouter` + `RouterProvider`, захищений маршрут через `loader` + `redirect`.
+
+### Маршрути (`src/routes/routes.tsx`)
+
+| Шлях             | Сторінка             | Доступ                                              |
+| ---------------- | -------------------- | --------------------------------------------------- |
+| `/`              | redirect на `/tasks` | усі                                                 |
+| `/tasks`         | `TasksPage`          | усі; `?status=`, `?priority=`, `?page=` у URL       |
+| `/tasks/:taskId` | `TaskDetailsPage`    | усі; дії «Редагувати» / «Видалити» лише після входу |
+| `/login`         | `LoginPage`          | лише гості (`guestOnlyLoader`)                      |
+| `/profile`       | `ProfilePage`        | лише авторизовані (`requireAuthLoader`)             |
+| `*`              | `NotFoundPage`       | усі                                                 |
+
+`AppLayout` — батьківський маршрут з Header, навігацією (`NavLink`: Tasks, Profile, Login / Logout) і `<Outlet />`.
+
+### Що зроблено
+
+- **Route params:** `TaskDetailsPage` бере `taskId` через `useParams()` і завантажує завдання через `taskRepository.getById`. На сторінці показано назву, опис, категорію, пріоритет, стан, `createdBy` і `createdAt`.
+- **`createdBy` / `createdAt`** входять у domain-модель `Task`. DummyJSON віддає лише `userId`, тому `createdBy` для завдань з API — `user #<userId>`, а `createdAt` — client-owned metadata: його ставить клієнт при створенні, для завдань з сервера він `null` (позначено в `src/types/task.ts`).
+- **Query params:** фільтри за станом і пріоритетом та номер сторінки живуть лише в URL (`useTaskFilters`, `useSearchParams`), окремого state для них немає. Після оновлення сторінки фільтри зберігаються.
+- **`TaskFormDialog`:** одна форма для двох режимів, `create` (кнопка `+` на `/tasks`) і `edit` (кнопка «Редагувати» на деталях). React Hook Form + Zod (`src/schemas/taskSchema.ts`). Поки йде запит, кнопка заблокована («Збереження...»). Діалог має заголовок (`aria-labelledby`), ставить фокус у поле назви, закривається клавішею Escape і кнопкою «Скасувати».
+- **Login:** React Hook Form + Zod (`src/schemas/authSchema.ts`): username обов'язковий, пароль від 6 символів. Помилки показуються біля полів, помилка сервера — над формою. Після входу користувач повертається на сторінку з `?redirect=`.
+- **Auth Context** (`src/context/AuthProvider.tsx`): `user`, `accessToken`, `isAuthenticated`, `login`, `logout`. `POST /auth/login` дає токени, `GET /auth/me` на сторінці профілю перевіряє токен.
+- **Сесія** (`src/auth/session.ts`) лежить поза React, щоб її могли читати loader-и роутера й HTTP-клієнт без hooks. Вона зберігається в `localStorage` і відновлюється після перезавантаження.
+- **Authorization header** формується в одному місці, у `src/api/httpClient.ts` (опція `auth: true`). Його отримують POST, PUT, DELETE і `/auth/me`. На відповідь 401 сесія закінчується.
+- **Authorization для CRUD:** гість, який натискає `+`, «Редагувати», «Видалити» чи галочку, потрапляє на Login (`useRequireAuth`). Крім того, `TaskProvider` перед кожною зміною ще раз перевіряє сесію, тож захист не тримається лише на прихованих кнопках.
+- **Profile:** username, email, статус авторизації, кнопка Logout. Після Logout `/profile` знову закритий.
+- **Додатково:** повернення на попередню сторінку після входу, відновлення сесії після перезавантаження, окрема сторінка 404.
+
+### Структура після №11
+
+```
+src/
+  api/          httpClient.ts (Bearer-токен з сесії)
+  auth/         session.ts (сесія поза React)
+  context/      AuthProvider, authContext, TaskProvider, taskContext
+  hooks/        useAuth, useRequireAuth, useTaskFilters, useTasks, useTask, useTaskContext
+  layouts/      AppLayout
+  pages/        TasksPage, TaskDetailsPage, LoginPage, ProfilePage, NotFoundPage
+  repositories/ taskRepository, authRepository
+  routes/       routes.tsx (конфігурація), loaders.ts (protected loader), router.ts
+  schemas/      authSchema, taskSchema (Zod)
+  components/   TaskFormDialog, TaskList, TaskItem, TaskFilters, TaskPagination, TaskStats, Toast, Header
+```
