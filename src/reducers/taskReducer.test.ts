@@ -11,6 +11,8 @@ function task(id: number, overrides: Partial<Task> = {}): Task {
     completed: false,
     priority: 'medium',
     category: 'Загальне',
+    createdBy: 'user #1',
+    createdAt: null,
     ...overrides,
   }
 }

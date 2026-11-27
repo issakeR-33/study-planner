@@ -1,27 +1,22 @@
 import { useState } from 'react'
+import { Link } from 'react-router'
+import { useRequireAuth } from '../../hooks/useRequireAuth'
 import { useTaskContext } from '../../hooks/useTaskContext'
-import type { Task, TaskDraft } from '../../types/task'
-import { PRIORITY_LABELS, toDraft } from '../../utils/tasks'
-import TaskForm from '../TaskForm/TaskForm'
+import type { Task } from '../../types/task'
+import { PRIORITY_LABELS } from '../../utils/tasks'
 import './TaskItem.scss'
 
 interface TaskItemProps {
   task: Task
 }
 
-type Mode = 'view' | 'edit' | 'confirmDelete'
-
 function TaskItem({ task }: TaskItemProps) {
-  const { toggleTask, updateTask, deleteTask, openDetails } = useTaskContext()
-  // режим елемента (перегляд, редагування, підтвердження видалення) - локальний UI-стан
-  const [mode, setMode] = useState<Mode>('view')
+  const { toggleTask, deleteTask } = useTaskContext()
+  // гість замість дії потрапляє на Login
+  const requireAuth = useRequireAuth()
+  // підтвердження видалення - локальний UI-стан елемента
+  const [isConfirming, setIsConfirming] = useState(false)
   const [isBusy, setIsBusy] = useState(false)
-
-  async function save(draft: TaskDraft) {
-    const ok = await updateTask(task, draft)
-    if (ok) setMode('view')
-    return ok
-  }
 
   async function confirmDelete() {
     setIsBusy(true)
@@ -29,14 +24,14 @@ function TaskItem({ task }: TaskItemProps) {
     // після успіху елемент зникає зі списку, тож стан оновлюємо лише при помилці
     if (!ok) {
       setIsBusy(false)
-      setMode('view')
+      setIsConfirming(false)
     }
   }
 
   const className = [
     'task-item',
     task.completed && 'task-item--completed',
-    mode === 'confirmDelete' && 'task-item--pending',
+    isConfirming && 'task-item--pending',
   ]
     .filter(Boolean)
     .join(' ')
@@ -48,15 +43,16 @@ function TaskItem({ task }: TaskItemProps) {
           type="checkbox"
           className="task-item__checkbox"
           checked={task.completed}
-          onChange={() => toggleTask(task)}
+          onChange={() => requireAuth(() => toggleTask(task))}
           aria-label={task.completed ? 'Позначити як невиконане' : 'Позначити як виконане'}
         />
 
         <div className="task-item__body">
           <h3 className="task-item__title">
-            <button type="button" className="task-item__link" onClick={() => openDetails(task.id)}>
+            {/* route param: /tasks/:taskId */}
+            <Link to={`/tasks/${task.id}`} className="task-item__link">
               {task.title}
-            </button>
+            </Link>
           </h3>
           {task.description && <p className="task-item__description">{task.description}</p>}
           <div className="task-item__meta">
@@ -68,18 +64,19 @@ function TaskItem({ task }: TaskItemProps) {
           </div>
         </div>
 
-        {mode === 'view' && (
+        {!isConfirming && (
           <div className="task-item__actions">
-            <button type="button" className="task-item__button" onClick={() => toggleTask(task)}>
+            <button
+              type="button"
+              className="task-item__button"
+              onClick={() => requireAuth(() => toggleTask(task))}
+            >
               {task.completed ? 'Повернути' : 'Виконано'}
-            </button>
-            <button type="button" className="task-item__button" onClick={() => setMode('edit')}>
-              Редагувати
             </button>
             <button
               type="button"
               className="task-item__button task-item__button--danger"
-              onClick={() => setMode('confirmDelete')}
+              onClick={() => requireAuth(() => setIsConfirming(true))}
             >
               Видалити
             </button>
@@ -87,7 +84,7 @@ function TaskItem({ task }: TaskItemProps) {
         )}
       </div>
 
-      {mode === 'confirmDelete' && (
+      {isConfirming && (
         <div className="task-item__confirm" role="alertdialog" aria-label="Підтвердження видалення">
           <span>Видалити завдання «{task.title}»?</span>
           <button
@@ -102,21 +99,11 @@ function TaskItem({ task }: TaskItemProps) {
             type="button"
             className="task-item__button"
             disabled={isBusy}
-            onClick={() => setMode('view')}
+            onClick={() => setIsConfirming(false)}
           >
             Ні
           </button>
         </div>
-      )}
-
-      {mode === 'edit' && (
-        <TaskForm
-          initialDraft={toDraft(task)}
-          heading="Редагування завдання"
-          submitLabel="Зберегти"
-          onSubmit={save}
-          onCancel={() => setMode('view')}
-        />
       )}
     </li>
   )

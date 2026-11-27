@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useState } from 'react'
+import { useCallback, useMemo, useReducer } from 'react'
 import { isAbortError } from '../api/httpClient'
 import {
   initialTasksState,
@@ -7,53 +7,56 @@ import {
   selectTotal,
   tasksReducer,
 } from '../reducers/taskReducer'
-import { taskRepository, type TaskPatch } from '../repositories/taskRepository'
+import { taskRepository, type TaskAuthor, type TaskPatch } from '../repositories/taskRepository'
 import type { Task, TaskDraft } from '../types/task'
 import { errorText } from '../utils/errors'
 
 export const PAGE_SIZE = 10
 
-// Server state списку завдань: завантаження сторінки, пагінація й CRUD через repository
+// Server state списку завдань: сторінка з API та CRUD через repository.
+// Яку сторінку вантажити, вирішує сторінка /tasks за query-параметром ?page=.
 export function useTasks() {
   const [state, dispatch] = useReducer(tasksReducer, initialTasksState)
-  // поточна сторінка - client/UI state
-  const [page, setPage] = useState(1)
-  // збільшення ключа повторює запит тієї самої сторінки
-  const [reloadKey, setReloadKey] = useState(0)
 
-  useEffect(() => {
-    // новий запит скасовує попередній через cleanup
-    const controller = new AbortController()
-    taskRepository
-      .getAll({ limit: PAGE_SIZE, skip: (page - 1) * PAGE_SIZE, signal: controller.signal })
-      .then((result) => dispatch({ type: 'fetchSuccess', page: result }))
-      .catch((error: unknown) => {
-        // скасований запит не є помилкою для користувача
-        if (!isAbortError(error)) dispatch({ type: 'fetchError', error: errorText(error) })
+  // signal від AbortController дозволяє скасувати запит, якщо сторінка змінилась
+  const loadPage = useCallback(async (page: number, signal: AbortSignal) => {
+    dispatch({ type: 'fetchStart' })
+    try {
+      const result = await taskRepository.getAll({
+        limit: PAGE_SIZE,
+        skip: (page - 1) * PAGE_SIZE,
+        signal,
       })
-    return () => controller.abort()
-  }, [page, reloadKey])
+      dispatch({ type: 'fetchSuccess', page: result })
+    } catch (error) {
+      // скасований запит не є помилкою для користувача
+      if (!isAbortError(error)) dispatch({ type: 'fetchError', error: errorText(error) })
+    }
+  }, [])
 
   // derived state перераховується лише при зміні server state
   const tasks = useMemo(() => selectTasks(state), [state])
   const total = selectTotal(state)
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
-  const goToPage = useCallback((next: number) => {
-    dispatch({ type: 'fetchStart' })
-    setPage(next)
-  }, [])
-
-  const reload = useCallback(() => {
-    dispatch({ type: 'fetchStart' })
-    setReloadKey((key) => key + 1)
-  }, [])
-
   const isLocal = useCallback((id: number) => isLocalTask(state, id), [state])
 
-  const create = useCallback(async (draft: TaskDraft) => {
-    const task = await taskRepository.create(draft)
+  // створене в цій сесії завдання може бути не на поточній сторінці
+  const findTask = useCallback(
+    (id: number) =>
+      state.changes.created.find((task) => task.id === id) ?? tasks.find((task) => task.id === id),
+    [state.changes.created, tasks],
+  )
+
+  const isDeleted = useCallback(
+    (id: number) => state.changes.deletedIds.includes(id),
+    [state.changes.deletedIds],
+  )
+
+  const create = useCallback(async (draft: TaskDraft, author: TaskAuthor) => {
+    const task = await taskRepository.create(draft, author)
     dispatch({ type: 'created', task })
+    return task
   }, [])
 
   // Створені на клієнті завдання на сервері не існують (DummyJSON їх не зберіг),
@@ -90,16 +93,23 @@ export function useTasks() {
     [isLocal],
   )
 
+  // локальні зміни поверх даних з сервера (для сторінки деталей)
+  const withLocalChanges = useCallback(
+    (task: Task) => state.changes.updated[task.id] ?? task,
+    [state.changes.updated],
+  )
+
   return {
     tasks,
     status: state.status,
     error: state.error,
     total,
-    page,
     totalPages,
-    goToPage,
-    reload,
+    loadPage,
     isLocal,
+    findTask,
+    isDeleted,
+    withLocalChanges,
     create,
     update,
     toggle,

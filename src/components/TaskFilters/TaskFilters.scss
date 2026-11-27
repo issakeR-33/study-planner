@@ -40,6 +40,18 @@
     border-radius: 999px;
   }
 
+  &__side {
+    display: flex;
+    gap: 8px;
+  }
+
+  &__select {
+    padding: 6px 10px;
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+  }
+
   &__reset {
     padding: 6px 12px;
     color: var(--color-muted);

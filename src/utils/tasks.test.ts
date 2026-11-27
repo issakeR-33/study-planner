@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { initialTasks } from '../data/initialTasks'
-import { createTask, DEFAULT_CATEGORY, filterTasks, getStats } from './tasks'
+import { filterByPriority, filterTasks, getStats, toDraft } from './tasks'
 
 describe('task helpers', () => {
   it('filters without changing the source array', () => {
@@ -16,20 +16,17 @@ describe('task helpers', () => {
     expect(getStats([])).toEqual({ total: 0, completed: 0, active: 0 })
   })
 
-  it('creates a task with a new id, trimmed text and a default category', () => {
-    const task = createTask(initialTasks, {
-      title: '  Hooks  ',
-      description: '',
-      category: ' ',
-      priority: 'low',
-    })
-    expect(task).toEqual({
-      id: 5,
-      title: 'Hooks',
-      description: '',
-      category: DEFAULT_CATEGORY,
-      priority: 'low',
-      completed: false,
+  it('filters by priority and keeps every task for all', () => {
+    expect(filterByPriority(initialTasks, 'high').map((t) => t.id)).toEqual([1])
+    expect(filterByPriority(initialTasks, 'all')).toHaveLength(4)
+  })
+
+  it('turns a task back into form values', () => {
+    expect(toDraft(initialTasks[0])).toEqual({
+      title: 'React Components',
+      description: 'Опрацювати базові принципи компонентів React',
+      category: 'React',
+      priority: 'high',
     })
   })
 })

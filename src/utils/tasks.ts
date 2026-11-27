@@ -1,4 +1,11 @@
-import type { Priority, Task, TaskDraft, TaskFilter, TaskStatsData } from '../types/task'
+import type {
+  Priority,
+  PriorityFilter,
+  Task,
+  TaskDraft,
+  TaskFilter,
+  TaskStatsData,
+} from '../types/task'
 
 export const PRIORITY_LABELS: Record<Priority, string> = {
   low: 'Низький',
@@ -14,6 +21,9 @@ export const FILTER_LABELS: Record<TaskFilter, string> = {
 
 export const DEFAULT_CATEGORY = 'Загальне'
 
+export const TASK_FILTERS: TaskFilter[] = ['all', 'active', 'completed']
+export const PRIORITY_FILTERS: PriorityFilter[] = ['all', 'high', 'medium', 'low']
+
 // Повертає новий масив, вихідний список завдань не змінюється.
 export function filterTasks(tasks: readonly Task[], filter: TaskFilter): Task[] {
   switch (filter) {
@@ -26,14 +36,15 @@ export function filterTasks(tasks: readonly Task[], filter: TaskFilter): Task[] 
   }
 }
 
+// Повертає новий масив; 'all' означає без фільтра за пріоритетом
+export function filterByPriority(tasks: readonly Task[], priority: PriorityFilter): Task[] {
+  return priority === 'all' ? [...tasks] : tasks.filter((task) => task.priority === priority)
+}
+
 // Статистика рахується з поточного масиву під час рендеру, окремий state не потрібен.
 export function getStats(tasks: readonly Task[]): TaskStatsData {
   const completed = tasks.filter((task) => task.completed).length
   return { total: tasks.length, completed, active: tasks.length - completed }
-}
-
-export function nextTaskId(tasks: readonly Task[]): number {
-  return tasks.reduce((max, task) => Math.max(max, task.id), 0) + 1
 }
 
 // прибирає зайві пробіли й підставляє категорію за замовчуванням
@@ -44,10 +55,6 @@ export function normalizeDraft(draft: TaskDraft): TaskDraft {
     category: draft.category.trim() || DEFAULT_CATEGORY,
     priority: draft.priority,
   }
-}
-
-export function createTask(tasks: readonly Task[], draft: TaskDraft): Task {
-  return { id: nextTaskId(tasks), ...normalizeDraft(draft), completed: false }
 }
 
 // дані завдання для форми редагування

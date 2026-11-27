@@ -1,0 +1,61 @@
+.app-layout {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 32px 16px 64px;
+
+  &__top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  &__nav {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+
+  &__link {
+    padding: 6px 12px;
+    color: var(--color-muted);
+    font-weight: 600;
+    text-decoration: none;
+    border-radius: 6px;
+
+    &:hover {
+      color: var(--color-primary);
+    }
+
+    &--active {
+      color: #fff;
+      background-color: var(--color-primary);
+
+      &:hover {
+        color: #fff;
+      }
+    }
+  }
+
+  &__user {
+    padding: 0 6px;
+    color: var(--color-muted);
+    font-size: 0.9rem;
+  }
+
+  &__logout {
+    padding: 6px 12px;
+    color: var(--color-danger);
+    font-weight: 600;
+    background: none;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    cursor: pointer;
+
+    &:hover {
+      border-color: var(--color-danger);
+    }
+  }
+}

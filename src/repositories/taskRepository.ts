@@ -33,10 +33,14 @@ export interface PageParams {
 /** Поля, які можна змінити на сервері. Решта полів Task існує лише на клієнті. */
 export type TaskPatch = Partial<Pick<Task, 'title' | 'completed'>>
 
-// навчальний userId, від імені якого створюються завдання
-const USER_ID = 1
+/** Автор нового завдання: користувач поточної сесії. */
+export interface TaskAuthor {
+  id: number
+  username: string
+}
 
-// DummyJSON не має опису, категорії й пріоритету: це client-only metadata зі значеннями за замовчуванням
+// DummyJSON не має опису, категорії, пріоритету й дати створення: це client-only metadata.
+// createdBy будуємо з userId, який API віддає, а createdAt сервер не знає, тому null.
 export function toTask(todo: ApiTodo): Task {
   return {
     id: todo.id,
@@ -45,6 +49,8 @@ export function toTask(todo: ApiTodo): Task {
     completed: todo.completed,
     priority: 'medium',
     category: DEFAULT_CATEGORY,
+    createdBy: `user #${todo.userId}`,
+    createdAt: null,
   }
 }
 
@@ -66,24 +72,36 @@ export const taskRepository = {
     return toTask(await request<ApiTodo>(`/todos/${id}`, { signal }))
   },
 
-  // опис, категорію й пріоритет API не зберігає, тому вони лишаються з форми
-  async create(draft: TaskDraft): Promise<Task> {
+  // Mutation-запити йдуть з Authorization: Bearer <token> (auth: true).
+  // Опис, категорію, пріоритет і дату API не зберігає, тому їх задає клієнт.
+  async create(draft: TaskDraft, author: TaskAuthor): Promise<Task> {
     const clean = normalizeDraft(draft)
     const todo = await request<ApiTodo>('/todos/add', {
       method: 'POST',
-      body: { todo: clean.title, completed: false, userId: USER_ID },
+      body: { todo: clean.title, completed: false, userId: author.id },
+      auth: true,
     })
-    return { ...toTask(todo), ...clean }
+    return {
+      ...toTask(todo),
+      ...clean,
+      createdBy: author.username,
+      // client-owned: момент створення фіксує клієнт
+      createdAt: new Date().toISOString(),
+    }
   },
 
   async update(id: number, patch: TaskPatch): Promise<Task> {
     return toTask(
-      await request<ApiTodo>(`/todos/${id}`, { method: 'PUT', body: toApiPatch(patch) }),
+      await request<ApiTodo>(`/todos/${id}`, {
+        method: 'PUT',
+        body: toApiPatch(patch),
+        auth: true,
+      }),
     )
   },
 
   async delete(id: number): Promise<void> {
-    await request<ApiTodo>(`/todos/${id}`, { method: 'DELETE' })
+    await request<ApiTodo>(`/todos/${id}`, { method: 'DELETE', auth: true })
   },
 }
 

@@ -8,6 +8,8 @@ export const initialTasks: Task[] = [
     completed: false,
     priority: 'high',
     category: 'React',
+    createdBy: 'emilys',
+    createdAt: '2026-11-01T10:00:00.000Z',
   },
   {
     id: 2,
@@ -16,6 +18,8 @@ export const initialTasks: Task[] = [
     completed: true,
     priority: 'medium',
     category: 'TypeScript',
+    createdBy: 'emilys',
+    createdAt: null,
   },
   {
     id: 3,
@@ -24,6 +28,8 @@ export const initialTasks: Task[] = [
     completed: false,
     priority: 'medium',
     category: 'React',
+    createdBy: 'emilys',
+    createdAt: '2026-11-01T10:00:00.000Z',
   },
   {
     id: 4,
@@ -32,5 +38,7 @@ export const initialTasks: Task[] = [
     completed: false,
     priority: 'low',
     category: 'Git',
+    createdBy: 'emilys',
+    createdAt: null,
   },
 ]

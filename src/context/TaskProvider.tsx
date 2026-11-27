@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { useLocalStorage } from '../hooks/useLocalStorage'
+import { getSession } from '../auth/session'
 import { useTasks } from '../hooks/useTasks'
-import type { Task, TaskDraft, TaskFilter } from '../types/task'
-import { errorText } from '../utils/errors'
+import type { Task, TaskDraft } from '../types/task'
+import { errorText, NotAuthenticatedError } from '../utils/errors'
 import { normalizeDraft } from '../utils/tasks'
 import {
   TaskContext,
@@ -17,28 +17,26 @@ interface TaskProviderProps {
   children: ReactNode
 }
 
-// Context лише роздає компонентам server state з useTasks і client/UI state,
-// щоб не передавати їх через кілька рівнів props. Дані Task зберігаються в одному місці.
+// Context роздає компонентам server state з useTasks і сповіщення.
+// Дані Task зберігаються в одному місці, тож зміни видно і в списку, і в деталях.
 export function TaskProvider({ children }: TaskProviderProps) {
   const {
     tasks,
     status,
     error,
     total,
-    page,
     totalPages,
-    goToPage,
-    reload,
+    loadPage,
     isLocal,
+    findTask,
+    isDeleted,
+    withLocalChanges,
     create,
     update,
     toggle,
     remove,
   } = useTasks()
 
-  // у localStorage лише client/UI state: активний фільтр, а не самі завдання
-  const [filter, setFilter] = useLocalStorage<TaskFilter>('study-planner:filter', 'all')
-  const [selectedId, setSelectedId] = useState<number | null>(null)
   const [toast, setToast] = useState<ToastMessage | null>(null)
 
   const showToast = useCallback((text: string, variant: ToastVariant = 'success') => {
@@ -47,11 +45,12 @@ export function TaskProvider({ children }: TaskProviderProps) {
 
   const dismissToast = useCallback(() => setToast(null), [])
 
-  // заголовок вкладки показує кількість невиконаних завдань на сторінці
+  // заголовок вкладки показує кількість невиконаних завдань на завантаженій сторінці
   useEffect(() => {
+    if (status !== 'success') return
     const active = tasks.filter((task) => !task.completed).length
     document.title = `Study Planner — ${active} active ${active === 1 ? 'task' : 'tasks'}`
-  }, [tasks])
+  }, [tasks, status])
 
   useEffect(() => {
     if (!toast) return
@@ -59,10 +58,11 @@ export function TaskProvider({ children }: TaskProviderProps) {
     return () => clearTimeout(timer)
   }, [toast])
 
-  // спільна обгортка для mutation: success або error toast і результат для форми
+  // Authorization: перед кожною зміною даних перевіряємо сесію, а не лише ховаємо кнопки
   const run = useCallback(
     async (action: () => Promise<void>, success: string, failure: string) => {
       try {
+        if (!getSession()) throw new NotAuthenticatedError()
         await action()
         if (success) showToast(success)
         return true
@@ -75,7 +75,16 @@ export function TaskProvider({ children }: TaskProviderProps) {
   )
 
   const createTask = useCallback(
-    (draft: TaskDraft) => run(() => create(draft), 'Завдання створено', 'Не вдалося створити'),
+    (draft: TaskDraft) =>
+      run(
+        async () => {
+          const user = getSession()?.user
+          if (!user) throw new NotAuthenticatedError()
+          await create(draft, { id: user.id, username: user.username })
+        },
+        'Завдання створено',
+        'Не вдалося створити',
+      ),
     [run, create],
   )
 
@@ -97,11 +106,7 @@ export function TaskProvider({ children }: TaskProviderProps) {
   )
 
   const deleteTask = useCallback(
-    (task: Task) => {
-      const result = run(() => remove(task.id), 'Завдання видалено', 'Не вдалося видалити')
-      setSelectedId((id) => (id === task.id ? null : id))
-      return result
-    },
+    (task: Task) => run(() => remove(task.id), 'Завдання видалено', 'Не вдалося видалити'),
     [run, remove],
   )
 
@@ -111,21 +116,18 @@ export function TaskProvider({ children }: TaskProviderProps) {
       status,
       error,
       total,
-      page,
       totalPages,
-      goToPage,
-      reload,
-      filter,
-      setFilter,
-      selectedId,
-      openDetails: setSelectedId,
-      closeDetails: () => setSelectedId(null),
+      loadPage,
+      findTask,
+      isDeleted,
+      isLocalTask: isLocal,
+      withLocalChanges,
       createTask,
       updateTask,
       toggleTask,
       deleteTask,
-      isLocalTask: isLocal,
       toast,
+      showToast,
       dismissToast,
     }),
     [
@@ -133,19 +135,18 @@ export function TaskProvider({ children }: TaskProviderProps) {
       status,
       error,
       total,
-      page,
       totalPages,
-      goToPage,
-      reload,
-      filter,
-      setFilter,
-      selectedId,
+      loadPage,
+      findTask,
+      isDeleted,
+      isLocal,
+      withLocalChanges,
       createTask,
       updateTask,
       toggleTask,
       deleteTask,
-      isLocal,
       toast,
+      showToast,
       dismissToast,
     ],
   )

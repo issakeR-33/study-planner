@@ -1,8 +1,11 @@
 import { useTaskContext } from '../../hooks/useTaskContext'
+import { useTaskFilters } from '../../hooks/useTaskFilters'
 import './TaskPagination.scss'
 
 function TaskPagination() {
-  const { page, totalPages, goToPage, status } = useTaskContext()
+  const { totalPages, status } = useTaskContext()
+  // номер сторінки теж у URL: ?page=2
+  const { page, setPage } = useTaskFilters()
 
   if (status === 'error') return null
 
@@ -12,7 +15,7 @@ function TaskPagination() {
         type="button"
         className="task-pagination__button"
         disabled={page <= 1}
-        onClick={() => goToPage(page - 1)}
+        onClick={() => setPage(page - 1)}
       >
         ← Попередня
       </button>
@@ -23,7 +26,7 @@ function TaskPagination() {
         type="button"
         className="task-pagination__button"
         disabled={page >= totalPages}
-        onClick={() => goToPage(page + 1)}
+        onClick={() => setPage(page + 1)}
       >
         Наступна →
       </button>
