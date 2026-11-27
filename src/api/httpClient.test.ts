@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { clearSession, getSession, setSession } from '../auth/session'
 import { HttpError, isAbortError, request } from './httpClient'
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  clearSession()
 })
 
 describe('httpClient', () => {
@@ -38,5 +40,40 @@ describe('httpClient', () => {
     })
     const error = await request('/todos').catch((e: unknown) => e)
     expect(isAbortError(error)).toBe(true)
+  })
+
+  it('adds Authorization: Bearer only for auth requests', async () => {
+    const fetchMock = vi.fn(async () => new Response('{}'))
+    vi.stubGlobal('fetch', fetchMock)
+    setSession({
+      user: { id: 1, username: 'emilys', email: '', firstName: '', lastName: '' },
+      accessToken: 'abc',
+      refreshToken: 'r',
+    })
+    await request('/todos')
+    await request('/todos/1', { method: 'DELETE', auth: true })
+    const header = (index: number) =>
+      new Headers((fetchMock.mock.calls[index] as unknown as [string, RequestInit])[1].headers).get(
+        'Authorization',
+      )
+    expect(header(0)).toBeNull()
+    expect(header(1)).toBe('Bearer abc')
+  })
+
+  it('refuses an auth request without a session and ends the session on 401', async () => {
+    vi.stubGlobal(
+      'fetch',
+      async () => new Response('{"message":"Token Expired!"}', { status: 401 }),
+    )
+    await expect(request('/auth/me', { auth: true })).rejects.toMatchObject({ status: 401 })
+    setSession({
+      user: { id: 1, username: 'emilys', email: '', firstName: '', lastName: '' },
+      accessToken: 'old',
+      refreshToken: 'r',
+    })
+    await expect(request('/auth/me', { auth: true })).rejects.toEqual(
+      new HttpError(401, 'Token Expired!'),
+    )
+    expect(getSession()).toBeNull()
   })
 })
